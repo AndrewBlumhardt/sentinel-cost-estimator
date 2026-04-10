@@ -1,0 +1,1798 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sentinel Cost Estimator</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b63f3'/%3E%3Cpath d='M32 10l18 6v14c0 11-7 20-18 24C21 50 14 41 14 30V16l18-6z' fill='%23ffffff' fill-opacity='.18'/%3E%3Cpath d='M18 40l10-10 8 6 10-12' fill='none' stroke='%23ffffff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='18' cy='40' r='3' fill='%23ffffff'/%3E%3Ccircle cx='28' cy='30' r='3' fill='%23ffffff'/%3E%3Ccircle cx='36' cy='36' r='3' fill='%23ffffff'/%3E%3Ccircle cx='46' cy='24' r='3' fill='%23ffffff'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --ink: #172238;
+      --muted: #5f6f8f;
+      --line: #d6dfef;
+      --brand: #0b63f3;
+      --brand-soft: #dce9ff;
+      --warn: #cc6a1a;
+      --shadow: 0 8px 28px rgba(28, 54, 103, 0.12);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1000px 420px at 10% -10%, #d4e5ff 0%, rgba(212,229,255,0) 70%),
+        radial-gradient(900px 380px at 100% 0%, #d7fff0 0%, rgba(215,255,240,0) 72%),
+        var(--bg);
+    }
+
+    .wrap {
+      max-width: 1360px;
+      margin: 22px auto 36px;
+      padding: 0 16px;
+    }
+
+    .hero {
+      background: linear-gradient(130deg, #0f2351 0%, #1e3a75 54%, #165f89 100%);
+      color: #fff;
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .hero-copy { flex: 1; min-width: 0; }
+
+    .hero-tools {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .hero-compare-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .ribbon-btn {
+      border: 1px solid rgba(122, 172, 255, 0.55);
+      background: rgba(7, 20, 46, 0.4);
+      color: #d7e8ff;
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 0.74rem;
+      font-weight: 700;
+    }
+
+    .ribbon-btn:hover {
+      border-color: #9ed9ff;
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .theme-toggle {
+      border: 1px solid rgba(122, 172, 255, 0.5);
+      background: rgba(7, 20, 46, 0.45);
+      color: #d7e8ff;
+      border-radius: 10px;
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .theme-toggle:hover {
+      border-color: #9ed9ff;
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.4vw, 2rem);
+      letter-spacing: 0.2px;
+    }
+
+    .hero p {
+      margin: 9px 0 0;
+      max-width: 100%;
+      color: #dce7ff;
+      line-height: 1.42;
+      font-size: 0.96rem;
+      white-space: nowrap;
+    }
+
+    .layout {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: 440px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .controls {
+      padding: 13px;
+      position: sticky;
+      top: 10px;
+      max-height: calc(100vh - 20px);
+      overflow: auto;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #fcfdff;
+    }
+
+    .section h3 {
+      margin: 2px 0 10px;
+      font-size: 0.95rem;
+      color: #1d3566;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .section-header h3 {
+      margin: 0;
+    }
+
+    .section-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .tip {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      color: #1f4fa8;
+      border: 1px solid #a9c2f1;
+      background: #eaf2ff;
+      cursor: help;
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    input[type="number"], select {
+      width: 100%;
+      border: 1px solid #bdcbe6;
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.8rem;
+      color: var(--ink);
+      background: #fff;
+    }
+
+    .hint {
+      margin-top: 5px;
+      font-size: 0.73rem;
+      color: #60749a;
+      line-height: 1.35;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    button {
+      border: 1px solid #bbcae8;
+      background: #fff;
+      color: var(--ink);
+      border-radius: 9px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: 0.18s ease;
+    }
+
+    button:hover {
+      border-color: #7ea4f3;
+      transform: translateY(-1px);
+    }
+
+    .btn-soft {
+      background: var(--brand-soft);
+      border-color: #bfd5ff;
+      color: #0b3d92;
+    }
+
+    .content {
+      padding: 12px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(92px, 1fr));
+      gap: 6px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-left: 4px solid transparent;
+      border-radius: 10px;
+      background: #fff;
+      padding: 7px 8px;
+    }
+
+    .card-tone-total { border-left-color: #f05565; }
+    .card-tone-ingest { border-left-color: #41c86a; }
+    .card-tone-retention { border-left-color: #f1c24d; }
+    .card-tone-longterm { border-left-color: #ff9f43; }
+    .card-tone-sdl { border-left-color: #39c6ff; }
+    .card-tone-budget { border-left-color: #b07cff; }
+    .card-tone-default { border-left-color: #5a8ddf; }
+
+    .card .k {
+      font-size: 0.62rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.25px;
+      line-height: 1.15;
+    }
+
+    .card .v {
+      font-family: "IBM Plex Mono", monospace;
+      margin-top: 3px;
+      font-size: 0.87rem;
+      font-weight: 600;
+      line-height: 1.15;
+    }
+
+    .compare-panel {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f9fbff;
+      padding: 8px;
+      font-size: 0.74rem;
+      color: #36507f;
+    }
+
+    .compare-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 6px;
+    }
+
+    .compare-cell {
+      border: 1px solid #d8e4f8;
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 6px;
+    }
+
+    .compare-k {
+      font-size: 0.66rem;
+      color: #6078a1;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+
+    .compare-v {
+      margin-top: 3px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .compare-delta-up { color: #b04848; }
+    .compare-delta-down { color: #2f8a4a; }
+
+    .chart-wrap {
+      margin-top: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    #chart {
+      width: 100%;
+      height: 330px;
+      display: block;
+      background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%);
+      border-radius: 10px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+      font-size: 0.76rem;
+      color: #3a4c74;
+    }
+
+    .chart-wrap { position: relative; }
+
+    .chart-tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      z-index: 4;
+      padding: 4px 7px;
+      border-radius: 8px;
+      font-size: 0.72rem;
+      font-family: "IBM Plex Mono", monospace;
+      background: rgba(8, 17, 32, 0.9);
+      color: #d9ebff;
+      border: 1px solid #2d5482;
+      white-space: nowrap;
+      transform: translate(10px, -12px);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      display: inline-block;
+      border-radius: 99px;
+      margin-right: 5px;
+      vertical-align: -1px;
+    }
+
+    .table-wrap {
+      margin-top: 10px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .monthly-table-wrap {
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.76rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid #e7eefb;
+      padding: 7px 8px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      color: #355182;
+      background: #f4f8ff;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      font-size: 0.74rem;
+    }
+
+    .mono { font-family: "IBM Plex Mono", monospace; }
+
+    .assume {
+      margin-top: 10px;
+      border: 1px dashed #b9cbed;
+      border-radius: 12px;
+      background: #f8fbff;
+      padding: 10px;
+      font-size: 0.78rem;
+      color: #34517f;
+      line-height: 1.42;
+    }
+
+    .disclaimer-note {
+      margin-top: 10px;
+      font-size: 0.72rem;
+      color: #6a7f9e;
+      text-align: left;
+      line-height: 1.35;
+    }
+
+    .notes-wrap {
+      margin-top: 10px;
+      position: relative;
+    }
+
+    #assumptions {
+      margin-top: 0;
+      padding-bottom: 46px;
+      white-space: nowrap;
+      overflow-x: auto;
+    }
+
+    .notes-export {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+    }
+
+    .warn { color: var(--warn); }
+
+    body.dark-theme {
+      --bg: #070b14;
+      --panel: #0d1524;
+      --ink: #d5e6ff;
+      --muted: #8ea6c9;
+      --line: #1e2d47;
+      --brand: #3bb4ff;
+      --brand-soft: #12243c;
+      --warn: #ffb457;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      background:
+        radial-gradient(1200px 440px at 15% -12%, rgba(35, 119, 255, 0.24) 0%, rgba(35, 119, 255, 0) 70%),
+        radial-gradient(900px 380px at 100% -10%, rgba(0, 197, 255, 0.2) 0%, rgba(0, 197, 255, 0) 72%),
+        var(--bg);
+    }
+
+    body.dark-theme .hero {
+      background: linear-gradient(140deg, #0a1527 0%, #0c2038 58%, #0f2e45 100%);
+      border: 1px solid #1c3658;
+    }
+
+    body.dark-theme .hero p { color: #9ec2e8; }
+
+    body.dark-theme .panel,
+    body.dark-theme .section,
+    body.dark-theme .card,
+    body.dark-theme .chart-wrap,
+    body.dark-theme .table-wrap {
+      background: #0e1829;
+      border-color: #1f2f48;
+    }
+
+    body.dark-theme .section h3 { color: #bbd5ff; }
+    body.dark-theme .hint { color: #7f9ec5; }
+    body.dark-theme .legend { color: #96b6df; }
+    body.dark-theme .chart-tooltip {
+      background: rgba(5, 12, 22, 0.95);
+      color: #cfe7ff;
+      border-color: #3a6ea3;
+    }
+
+    body.dark-theme input[type="number"],
+    body.dark-theme select {
+      background: #0c1422;
+      color: #deecff;
+      border-color: #284264;
+    }
+
+    body.dark-theme button {
+      background: #102137;
+      color: #d8ebff;
+      border-color: #2b4668;
+    }
+
+    body.dark-theme .btn-soft {
+      background: #123053;
+      color: #9ad4ff;
+      border-color: #276195;
+    }
+
+    body.dark-theme th {
+      color: #9ec8ff;
+      background: #11243a;
+      border-bottom-color: #1f3753;
+    }
+
+    body.dark-theme td { border-bottom-color: #1a2c45; }
+
+    body.dark-theme #chart {
+      background: linear-gradient(180deg, #0c1524 0%, #0b1220 100%);
+    }
+
+    body.dark-theme .assume {
+      border-color: #23527f;
+      background: #0d2034;
+      color: #a9c7ec;
+    }
+
+    @media print {
+      body { background: #fff; }
+      .hero, .panel { box-shadow: none; }
+      .layout { grid-template-columns: 420px 1fr; }
+      .controls {
+        position: static;
+        max-height: none;
+        overflow: visible;
+      }
+      .notes-export { display: none; }
+      .theme-toggle { display: none; }
+      .hero-compare-actions { display: none; }
+    }
+
+    @media (max-width: 1140px) {
+      .layout { grid-template-columns: 1fr; }
+      .controls { position: static; max-height: none; }
+      .cards { grid-template-columns: repeat(3, minmax(110px, 1fr)); }
+      .compare-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      .hero { flex-direction: column; align-items: stretch; }
+      .hero-tools { align-items: flex-start; }
+      .hero p { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="hero-copy">
+        <h1>Microsoft Sentinel Cost Estimator</h1>
+        <p>Fast estimate of Sentinel, retention, archive, and SDL costs.</p>
+      </div>
+      <div class="hero-tools">
+        <button id="themeToggle" type="button" class="theme-toggle">Dark Mode: Off</button>
+        <div class="hero-compare-actions">
+          <button id="setCompareBaseline" type="button" class="ribbon-btn">Set Baseline</button>
+          <button id="clearCompareBaseline" type="button" class="ribbon-btn">Clear Compare</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="panel controls">
+        <div class="section">
+          <div class="section-header">
+            <h3>Company Profile</h3>
+            <div class="section-actions">
+              <button id="applyBestPractices" type="button" title="Settings recommended by author">Best Practices</button>
+              <button id="resetProfile" type="button">Reset</button>
+            </div>
+          </div>
+          <div class="grid2">
+            <div>
+              <label for="template">Company Size</label>
+              <select id="template"></select>
+            </div>
+            <div>
+              <label for="users">M365 Seats</label>
+              <input id="users" type="number" min="0" step="1" value="3000" />
+            </div>
+            <div>
+              <label for="servers">Servers</label>
+              <input id="servers" type="number" min="0" step="1" value="250" />
+            </div>
+            <div>
+              <label for="defenderForServers">Defender for Servers</label>
+              <select id="defenderForServers">
+                <option value="yes" selected>Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <div>
+              <label for="license">Primary License</label>
+              <select id="license">
+                <option value="E7">E7</option>
+                <option value="E5" selected>E5</option>
+                <option value="E3">E3</option>
+                <option value="MIXED">Mixed</option>
+              </select>
+            </div>
+            <div>
+              <label for="months">Forecast Months</label>
+              <input id="months" type="number" min="6" max="144" step="1" value="36" />
+            </div>
+          </div>
+          <div class="hint">Template presets load baseline values. You can override any field.</div>
+        </div>
+
+        <div class="section">
+          <h3>Volume Growth Model</h3>
+          <div class="grid2">
+            <div>
+              <label for="rampMonths">Months to 100% Volume</label>
+              <input id="rampMonths" type="number" min="0" max="36" step="1" value="0" />
+            </div>
+            <div>
+              <label for="annualGrowthPct">Annual Increase/Decline %</label>
+              <input id="annualGrowthPct" type="number" min="-20" max="50" step="0.1" value="5" />
+            </div>
+          </div>
+          <div class="hint">Ramp speeds activation. Annual change is year-over-year. Use negative values for decline.</div>
+        </div>
+
+        <div class="section">
+          <h3>Sentinel Pricing</h3>
+          <div class="grid2">
+            <div>
+              <label for="tier">Commitment Tier</label>
+              <select id="tier"></select>
+            </div>
+            <div>
+              <label for="tierRate">Tier Price $/GB</label>
+              <input id="tierRate" type="number" min="0" step="0.01" value="3.90" />
+            </div>
+            <div>
+              <label for="estimatedMonthlyGb">Estimated Monthly GB</label>
+              <input id="estimatedMonthlyGb" type="number" min="0" step="100" value="2700" />
+            </div>
+            <div>
+              <label for="estimatedDailyGb">Estimated Daily GB</label>
+              <input id="estimatedDailyGb" type="number" min="0" step="1" value="90" />
+            </div>
+          </div>
+          <div class="hint">Daily and monthly values are linked. Tier selection seeds both.</div>
+        </div>
+
+        <div class="section">
+          <h3>Retention</h3>
+          <div class="grid2">
+            <div>
+              <label for="interactiveDays">Interactive Days (max 720)</label>
+              <select id="interactiveDays">
+                <option value="90" selected>90 days</option>
+                <option value="120">120 days</option>
+                <option value="180">180 days</option>
+                <option value="270">270 days</option>
+                <option value="365">1 year</option>
+                <option value="540">1.5 years</option>
+                <option value="720">2 years (max)</option>
+              </select>
+            </div>
+            <div>
+              <label for="longTermDays">Long-term Days</label>
+              <select id="longTermDays">
+                <option value="0" selected>0 days</option>
+                <option value="30">30 days</option>
+                <option value="60">60 days</option>
+                <option value="90">90 days</option>
+                <option value="120">120 days</option>
+                <option value="180">180 days</option>
+                <option value="270">270 days</option>
+                <option value="365">1 year</option>
+                <option value="548">1.5 years</option>
+                <option value="730">2 years</option>
+                <option value="1095">3 years</option>
+                <option value="1460">4 years</option>
+                <option value="1825">5 years</option>
+                <option value="2190">6 years</option>
+                <option value="2555">7 years</option>
+                <option value="2920">8 years</option>
+                <option value="3285">9 years</option>
+                <option value="3650">10 years</option>
+                <option value="4015">11 years</option>
+                <option value="4380">12 years</option>
+              </select>
+            </div>
+            <div>
+              <label for="enableSdl">Use SDL for Long-term</label>
+              <select id="enableSdl">
+                <option value="yes">Yes</option>
+                <option value="no" selected>No</option>
+              </select>
+            </div>
+            <div>
+              <label id="budgetLabel" for="budget">Restore/SDL Budget Policy %</label>
+              <input id="budget" type="number" min="0" max="100" step="0.1" value="5" readonly />
+            </div>
+          </div>
+          <div class="hint">Set interactive and long-term retention. Use SDL to route connector data lake %.</div>
+        </div>
+
+        <div class="section">
+          <h3>Connector Mix</h3>
+          <div class="table-wrap" style="margin-top: 8px; max-height: 300px;">
+            <table id="connectorTable">
+              <thead>
+                <tr>
+                  <th>Use</th>
+                  <th>Connector</th>
+                  <th>Monthly GB</th>
+                  <th>% Filtered</th>
+                  <th>% to SDL</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="hint">Filter and SDL are per-connector percentages.</div>
+        </div>
+      </div>
+
+      <div class="panel content">
+        <div class="cards" id="summaryCards"></div>
+        <div id="comparePanel" class="compare-panel" style="display:none;"></div>
+
+        <div class="chart-wrap">
+          <canvas id="chart"></canvas>
+          <div class="legend" id="legend"></div>
+          <div class="chart-tooltip" id="chartTooltip"></div>
+        </div>
+
+        <div class="table-wrap monthly-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Billable Sentinel GB/day</th>
+                <th>Total Sentinel GB/day</th>
+                <th>SDL GB/day</th>
+                <th>Ingest $</th>
+                <th>Interactive $</th>
+                <th>Archive $</th>
+                <th>SDL $</th>
+                <th>Total $</th>
+              </tr>
+            </thead>
+            <tbody id="monthlyTbody"></tbody>
+          </table>
+        </div>
+
+        <div class="notes-wrap">
+          <div class="assume" id="assumptions"></div>
+          <div class="notes-export">
+            <button id="exportPdf" type="button" class="btn-soft">Export PDF</button>
+          </div>
+        </div>
+
+        <div class="assume">
+          <b>Reference Links (use your tenant and region values)</b><br />
+          - Microsoft Sentinel pricing: <a href="https://azure.microsoft.com/pricing/details/microsoft-sentinel/" target="_blank" rel="noopener">azure.microsoft.com/pricing/details/microsoft-sentinel</a><br />
+          - Azure Monitor Logs pricing (retention and archive): <a href="https://azure.microsoft.com/pricing/details/monitor/" target="_blank" rel="noopener">azure.microsoft.com/pricing/details/monitor</a><br />
+          - Professional profile: <a href="https://www.linkedin.com/in/andrewblumhardt/" target="_blank" rel="noopener">linkedin.com/in/andrewblumhardt</a><br />
+          - Code profile: <a href="https://github.com/AndrewBlumhardt" target="_blank" rel="noopener">github.com/AndrewBlumhardt</a><br />
+          - Use Sentinel settings and pricing page in your own workspace for final values.
+        </div>
+
+        <div class="disclaimer-note">
+          Disclaimer: This calculator is an estimate based on implementation experience and practical patterns. It provides guidance only, has no guarantees, and should not be used as a contractual commitment. Always validate against official Microsoft documentation, tenant-specific configuration, and current regional pricing.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const FREE_DAYS = 90;
+    const DAYS_PER_MONTH = 30;
+
+    const money = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    const shortNum = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+    const templates = {
+      t0: {
+        label: "T0",
+        dailyRange: "50 GB/day",
+        users: 500,
+        servers: 25,
+        commitmentGbDay: 50,
+        estimatedTbMonth: 0.3,
+        billableTbMonth: 0.2,
+        xdrTbMonth: 0.2,
+        entraTbMonth: 0.0,
+        networkTbMonth: 0.0,
+        eventsTbMonth: 0.1,
+        otherTbMonth: 0.0,
+        sdlOffload: 15,
+        annualGrowthPct: 5,
+        rampMonths: 0
+      },
+      t1: {
+        label: "T1",
+        dailyRange: "100 GB/day",
+        users: 3000,
+        servers: 100,
+        commitmentGbDay: 100,
+        estimatedTbMonth: 1.4,
+        billableTbMonth: 1.0,
+        xdrTbMonth: 0.9,
+        entraTbMonth: 0.1,
+        networkTbMonth: 0.1,
+        eventsTbMonth: 0.2,
+        otherTbMonth: 0.1,
+        sdlOffload: 15,
+        annualGrowthPct: 5,
+        rampMonths: 0
+      },
+      t2: {
+        label: "T2",
+        dailyRange: "500 GB/day",
+        users: 12000,
+        servers: 500,
+        commitmentGbDay: 500,
+        estimatedTbMonth: 5.9,
+        billableTbMonth: 4.1,
+        xdrTbMonth: 3.6,
+        entraTbMonth: 0.3,
+        networkTbMonth: 0.4,
+        eventsTbMonth: 1.2,
+        otherTbMonth: 0.4,
+        sdlOffload: 20,
+        annualGrowthPct: 5,
+        rampMonths: 0
+      },
+      t3: {
+        label: "T3",
+        dailyRange: "1,000 GB/day",
+        users: 40000,
+        servers: 2500,
+        commitmentGbDay: 1000,
+        estimatedTbMonth: 21.9,
+        billableTbMonth: 15.9,
+        xdrTbMonth: 12.0,
+        entraTbMonth: 1.1,
+        networkTbMonth: 1.4,
+        eventsTbMonth: 6.0,
+        otherTbMonth: 1.4,
+        sdlOffload: 25,
+        annualGrowthPct: 5,
+        rampMonths: 0
+      },
+      t4: {
+        label: "T4",
+        dailyRange: "2,000 GB/day",
+        users: 120000,
+        servers: 10000,
+        commitmentGbDay: 2000,
+        estimatedTbMonth: 71.8,
+        billableTbMonth: 53.8,
+        xdrTbMonth: 36.0,
+        entraTbMonth: 3.2,
+        networkTbMonth: 4.3,
+        eventsTbMonth: 24.0,
+        otherTbMonth: 4.3,
+        sdlOffload: 30,
+        annualGrowthPct: 5,
+        rampMonths: 0
+      },
+      t5: {
+        label: "T5",
+        dailyRange: "5,000 GB/day",
+        users: 500000,
+        servers: 25000,
+        commitmentGbDay: 5000,
+        estimatedTbMonth: 259.5,
+        billableTbMonth: 184.5,
+        xdrTbMonth: 150.0,
+        entraTbMonth: 13.5,
+        networkTbMonth: 18.0,
+        eventsTbMonth: 60.0,
+        otherTbMonth: 18.0,
+        sdlOffload: 35,
+        annualGrowthPct: 5,
+        rampMonths: 0
+      }
+    };
+
+    const commitmentTiers = {
+      payg: { label: "PAYG", gbPerDay: 0, defaultRate: 4.60 },
+      "100": { label: "100 GB/day", gbPerDay: 100, defaultRate: 3.90 },
+      "200": { label: "200 GB/day", gbPerDay: 200, defaultRate: 3.55 },
+      "300": { label: "300 GB/day", gbPerDay: 300, defaultRate: 3.35 },
+      "500": { label: "500 GB/day", gbPerDay: 500, defaultRate: 3.10 },
+      "1000": { label: "1000 GB/day", gbPerDay: 1000, defaultRate: 2.80 }
+    };
+
+    const connectors = [
+      { key: "defenderXdr", name: "Defender XDR", monthlyGb: 0, billable: true, enabled: true, core: true, sdlPct: 0, filterPct: 0 },
+      { key: "entra", name: "Entra", monthlyGb: 0, billable: true, enabled: true, core: true, sdlPct: 0, filterPct: 0 },
+      { key: "azureDiagnostics", name: "AzureDiagnostics", monthlyGb: 0, billable: true, enabled: true, core: true, sdlPct: 0, filterPct: 0 },
+      { key: "syslog", name: "Network (Syslog)", monthlyGb: 0, billable: true, enabled: true, core: true, sdlPct: 0, filterPct: 0 },
+      { key: "cef", name: "Network (CEF)", monthlyGb: 0, billable: true, enabled: true, core: true, sdlPct: 0, filterPct: 0 },
+      { key: "securityEvents", name: "Security Events", monthlyGb: 0, billable: false, enabled: true, core: true, sdlPct: 0, filterPct: 0 },
+      { key: "threatIntel", name: "Threat Intelligence", monthlyGb: 10, billable: true, enabled: true, core: false, sdlPct: 0, filterPct: 0 },
+      { key: "other", name: "Other", monthlyGb: 0, billable: true, enabled: true, core: false, sdlPct: 0, filterPct: 0 }
+    ];
+
+    const ids = [
+      "servers", "users", "license", "defenderForServers", "months", "rampMonths", "annualGrowthPct", "tier", "tierRate",
+      "estimatedMonthlyGb", "estimatedDailyGb",
+      "interactiveDays", "longTermDays", "enableSdl", "budget"
+    ];
+
+    const state = {};
+    let chartHoverData = null;
+    let compareBaseline = null;
+
+    function tbToGb(tb) {
+      return Math.round(tb * 1024);
+    }
+
+    function formatCount(value) {
+      return Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    }
+
+    function syncEstimatedFromMonthly() {
+      const monthly = Math.max(0, Number(document.getElementById("estimatedMonthlyGb").value));
+      document.getElementById("estimatedDailyGb").value = Math.round(monthly / DAYS_PER_MONTH);
+    }
+
+    function syncEstimatedFromDaily() {
+      const daily = Math.max(0, Number(document.getElementById("estimatedDailyGb").value));
+      document.getElementById("estimatedMonthlyGb").value = Math.round(daily * DAYS_PER_MONTH);
+    }
+
+    function nearestCommitmentTierKey(targetGbDay) {
+      const candidates = Object.entries(commitmentTiers)
+        .filter(([, value]) => value.gbPerDay > 0)
+        .map(([key, value]) => ({ key, gbPerDay: value.gbPerDay }));
+
+      let bestKey = "payg";
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      candidates.forEach((candidate) => {
+        const distance = Math.abs(candidate.gbPerDay - targetGbDay);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestKey = candidate.key;
+        }
+      });
+
+      return bestKey;
+    }
+
+    function readState() {
+      ids.forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (id === "enableSdl") state[id] = el.value === "yes";
+        else if (el.type === "number") state[id] = Number(el.value);
+        else if (el.type === "checkbox") state[id] = el.checked;
+        else state[id] = el.value;
+      });
+      state.connectorConfig = connectors.map((c) => ({ ...c }));
+    }
+
+    function isDefenderForServersEnabled() {
+      return document.getElementById("defenderForServers")?.value !== "no";
+    }
+
+    function updateSecurityEventsBilling() {
+      const securityEvents = connectors.find((c) => c.key === "securityEvents");
+      if (!securityEvents) return;
+      securityEvents.billable = !isDefenderForServersEnabled();
+    }
+
+    function seedConnectorEstimates() {
+      const users = Number(document.getElementById("users").value);
+      const servers = Number(document.getElementById("servers").value);
+      const estimatedMonthlyGb = Math.max(0, Number(document.getElementById("estimatedMonthlyGb").value));
+
+      const xdrDailyMb = users * 10;
+      const xdrDiscountDailyMb = users * 5;
+      const eventsDailyMb = servers * 80;
+
+      const xdrMonthlyRawGb = (xdrDailyMb * DAYS_PER_MONTH) / 1024;
+      const xdrDiscountMonthlyGb = (xdrDiscountDailyMb * DAYS_PER_MONTH) / 1024;
+      const xdrMonthlyBillableGb = Math.max(0, xdrMonthlyRawGb - xdrDiscountMonthlyGb);
+      const eventsMonthlyGb = (eventsDailyMb * DAYS_PER_MONTH) / 1024;
+
+      const baselineMonthlyGb = Math.max(estimatedMonthlyGb, xdrMonthlyBillableGb + eventsMonthlyGb);
+      const xdrMonthlyGb = Math.round(baselineMonthlyGb * 0.60);
+      const securityMonthlyGb = Math.round(baselineMonthlyGb * 0.25);
+      const entraMonthlyGb = Math.round(baselineMonthlyGb * 0.07);
+      const networkMonthlyGb = Math.round(baselineMonthlyGb * 0.05);
+      const otherMonthlyGb = Math.round(baselineMonthlyGb * 0.03);
+      const perNetwork = Math.round(networkMonthlyGb / 3);
+      updateSecurityEventsBilling();
+
+      connectors.forEach((c) => {
+        if (c.key === "defenderXdr") c.monthlyGb = xdrMonthlyGb;
+        if (c.key === "entra") c.monthlyGb = entraMonthlyGb;
+        if (c.key === "azureDiagnostics") c.monthlyGb = perNetwork;
+        if (c.key === "syslog") c.monthlyGb = perNetwork;
+        if (c.key === "cef") c.monthlyGb = perNetwork;
+        if (c.key === "securityEvents") c.monthlyGb = securityMonthlyGb;
+        if (c.key === "threatIntel") c.monthlyGb = 10;
+        if (c.key === "other") c.monthlyGb = otherMonthlyGb;
+      });
+    }
+
+    function setupTemplateAndTier() {
+      const template = document.getElementById("template");
+      Object.entries(templates).forEach(([key, t]) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = `${t.label}: ${t.commitmentGbDay} GB/day, ${formatCount(t.users)} users, ${formatCount(t.servers)} servers`;
+        template.appendChild(opt);
+      });
+      template.value = "t1";
+
+      const tierEl = document.getElementById("tier");
+      Object.entries(commitmentTiers).forEach(([key, v]) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = `${v.label} ($${v.defaultRate.toFixed(2)}/GB)`;
+        tierEl.appendChild(opt);
+      });
+      const defaultProfile = templates.t1;
+      const defaultTierKey = nearestCommitmentTierKey(defaultProfile.commitmentGbDay);
+      tierEl.value = defaultTierKey;
+      document.getElementById("tierRate").value = commitmentTiers[defaultTierKey].defaultRate.toFixed(2);
+      document.getElementById("estimatedMonthlyGb").value = tbToGb(defaultProfile.estimatedTbMonth);
+      syncEstimatedFromMonthly();
+      document.getElementById("users").value = defaultProfile.users;
+      document.getElementById("servers").value = defaultProfile.servers;
+      document.getElementById("annualGrowthPct").value = defaultProfile.annualGrowthPct;
+      document.getElementById("rampMonths").value = defaultProfile.rampMonths;
+      applyTemplate();
+    }
+
+    function applyTemplate() {
+      const t = templates[document.getElementById("template").value];
+      if (!t) return;
+      document.getElementById("servers").value = t.servers;
+      document.getElementById("users").value = t.users;
+      const nearestTier = nearestCommitmentTierKey(t.commitmentGbDay);
+      document.getElementById("tier").value = nearestTier;
+      document.getElementById("annualGrowthPct").value = t.annualGrowthPct;
+      document.getElementById("rampMonths").value = t.rampMonths;
+      document.getElementById("tierRate").value = commitmentTiers[nearestTier].defaultRate.toFixed(2);
+      document.getElementById("estimatedMonthlyGb").value = tbToGb(t.estimatedTbMonth);
+      syncEstimatedFromMonthly();
+
+      const networkGb = tbToGb(t.networkTbMonth);
+      const perNetwork = Math.round(networkGb / 3);
+      connectors.forEach((c) => {
+        if (c.key === "defenderXdr") c.monthlyGb = tbToGb(t.xdrTbMonth);
+        if (c.key === "entra") c.monthlyGb = tbToGb(t.entraTbMonth);
+        if (c.key === "azureDiagnostics") c.monthlyGb = perNetwork;
+        if (c.key === "syslog") c.monthlyGb = perNetwork;
+        if (c.key === "cef") c.monthlyGb = perNetwork;
+        if (c.key === "securityEvents") c.monthlyGb = tbToGb(t.eventsTbMonth);
+        if (c.key === "threatIntel") c.monthlyGb = 10;
+        if (c.key === "other") c.monthlyGb = tbToGb(t.otherTbMonth);
+      });
+      renderConnectorRows();
+      recalc();
+    }
+
+    function resetProfileSettings() {
+      const defaultTemplateKey = "t1";
+      const defaultTemplate = templates[defaultTemplateKey];
+      const defaultTierKey = nearestCommitmentTierKey(defaultTemplate.commitmentGbDay);
+
+      document.getElementById("template").value = defaultTemplateKey;
+      document.getElementById("users").value = defaultTemplate.users;
+      document.getElementById("servers").value = defaultTemplate.servers;
+      document.getElementById("license").value = "E5";
+      document.getElementById("defenderForServers").value = "yes";
+      document.getElementById("months").value = "36";
+      document.getElementById("rampMonths").value = defaultTemplate.rampMonths;
+      document.getElementById("annualGrowthPct").value = defaultTemplate.annualGrowthPct;
+      document.getElementById("tier").value = defaultTierKey;
+      document.getElementById("tierRate").value = commitmentTiers[defaultTierKey].defaultRate.toFixed(2);
+      document.getElementById("estimatedMonthlyGb").value = tbToGb(defaultTemplate.estimatedTbMonth);
+      syncEstimatedFromMonthly();
+      document.getElementById("interactiveDays").value = "90";
+      document.getElementById("longTermDays").value = "0";
+      document.getElementById("enableSdl").value = "no";
+      document.getElementById("budget").value = "5";
+      document.getElementById("budgetLabel").textContent = "Restore Budget Policy %";
+
+      connectors.forEach((c) => {
+        c.enabled = true;
+        c.filterPct = 0;
+        c.sdlPct = 0;
+      });
+
+      applyTemplate();
+      updateSecurityEventsBilling();
+      renderConnectorRows();
+      recalc();
+    }
+
+    function setCompareBaselineSnapshot() {
+      const forecast = buildMonthlyForecast();
+      compareBaseline = {
+        metrics: buildSummaryMetrics(forecast),
+        stamp: new Date().toLocaleString()
+      };
+      recalc();
+    }
+
+    function clearCompareBaselineSnapshot() {
+      compareBaseline = null;
+      recalc();
+    }
+
+    function renderConnectorRows() {
+      const tbody = document.querySelector("#connectorTable tbody");
+      tbody.innerHTML = "";
+      const sdlEnabled = document.getElementById("enableSdl").value === "yes";
+
+      connectors.forEach((c, idx) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><input type="checkbox" ${c.enabled ? "checked" : ""} data-k="enable" data-i="${idx}" /></td>
+          <td>${c.name}</td>
+          <td><input type="number" min="0" step="0.1" value="${Number(c.monthlyGb)}" data-k="monthly" data-i="${idx}" style="width:90px" /></td>
+          <td><input type="number" min="0" max="95" step="1" value="${c.filterPct}" data-k="filter" data-i="${idx}" style="width:65px" /></td>
+          <td><input type="number" min="0" max="100" step="1" value="${c.sdlPct}" data-k="sdlpct" data-i="${idx}" style="width:65px" ${!sdlEnabled ? "disabled" : ""} /></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll("input").forEach((el) => {
+        el.addEventListener("input", (e) => {
+          const i = Number(e.target.dataset.i);
+          const kind = e.target.dataset.k;
+          if (kind === "enable") connectors[i].enabled = e.target.checked;
+          if (kind === "monthly") connectors[i].monthlyGb = Number(e.target.value);
+          if (kind === "sdlpct") connectors[i].sdlPct = Math.max(0, Math.min(100, Number(e.target.value)));
+          if (kind === "filter") connectors[i].filterPct = Math.max(0, Math.min(95, Number(e.target.value)));
+          recalc();
+        });
+      });
+    }
+
+    function applyBestPracticesSettings() {
+      document.getElementById("interactiveDays").value = "365";
+      document.getElementById("longTermDays").value = "1095";
+      document.getElementById("annualGrowthPct").value = "8";
+      document.getElementById("enableSdl").value = "yes";
+      document.getElementById("defenderForServers").value = "yes";
+      document.getElementById("license").value = "E7";
+
+      seedConnectorEstimates();
+      updateSecurityEventsBilling();
+
+      connectors.forEach((c) => {
+        c.enabled = true;
+        c.filterPct = 0;
+        c.sdlPct = 0;
+
+        if (c.key === "entra") {
+          c.filterPct = 50;
+          c.sdlPct = 50;
+        }
+
+        if (c.key === "securityEvents") {
+          c.filterPct = 25;
+        }
+
+        if (c.key === "azureDiagnostics" || c.key === "syslog" || c.key === "cef") {
+          c.filterPct = 25;
+          c.sdlPct = 80;
+        }
+
+        if (c.key === "defenderXdr") {
+          c.sdlPct = 50;
+        }
+      });
+
+      renderConnectorRows();
+      recalc();
+
+      document.getElementById("budget").value = "5";
+
+      recalc();
+    }
+
+    function growthFactorForMonth(monthIndex) {
+      const rampMonths = Math.max(0, Number(document.getElementById("rampMonths").value));
+      const annualGrowthPct = Number(document.getElementById("annualGrowthPct").value);
+      const ramp = rampMonths === 0 ? 1 : Math.min(1, monthIndex / rampMonths);
+      const growth = Math.pow(1 + (annualGrowthPct / 100), Math.max(0, monthIndex - 1) / 12);
+      return ramp * growth;
+    }
+
+    function calcMonthlyIngestForMonth(monthIndex) {
+      const enableSdl = document.getElementById("enableSdl").value === "yes";
+      const factor = growthFactorForMonth(monthIndex);
+
+      let totalMonthlyGb = 0;
+      let billableMonthlyGb = 0;
+      let sdlMonthlyGb = 0;
+
+      connectors.forEach((c) => {
+        if (!c.enabled) return;
+
+        const raw = c.monthlyGb * factor * (1 - (c.filterPct / 100));
+        const toSdl = enableSdl ? raw * (c.sdlPct / 100) : 0;
+        const toSentinel = raw - toSdl;
+
+        totalMonthlyGb += toSentinel;
+        sdlMonthlyGb += toSdl;
+        if (c.billable) billableMonthlyGb += toSentinel;
+      });
+
+      return { totalMonthlyGb, billableMonthlyGb, sdlMonthlyGb };
+    }
+
+    function buildMonthlyForecast() {
+      readState();
+
+      const INTERACTIVE_RATE = 0.12;
+      const ARCHIVE_RATE = 0.02;
+      const SDL_INGEST_RATE = 0.30;
+      const SDL_STORAGE_RATE = 0.01;
+      const BUDGET_PCT_OF_ANNUAL = 0.05;
+
+      const enableSdl = state.enableSdl;
+      const tierCfg = commitmentTiers[state.tier] || commitmentTiers.payg;
+      const tierRate = Math.max(0, state.tierRate);
+      const months = Math.max(6, Math.min(144, state.months));
+      const interactiveDays = Math.max(FREE_DAYS, Math.min(720, state.interactiveDays));
+      const interactiveMonths = Math.ceil(interactiveDays / DAYS_PER_MONTH);
+      const freeMonths = Math.ceil(FREE_DAYS / DAYS_PER_MONTH);
+      const longTermMonths = Math.ceil(Math.max(0, state.longTermDays) / DAYS_PER_MONTH);
+      const SDL_COMPRESSION = 6;
+
+      const rows = [];
+      const billableIngestHistory = [];
+      const sentinelIngestHistory = [];
+      const sdlIngestHistory = [];
+
+      let firstMonthBillableGbDay = 0;
+      let firstMonthTotalGbDay = 0;
+      let lastMonthBillableGbDay = 0;
+      let lastMonthTotalGbDay = 0;
+      let firstMonthTotal = 0;
+      let lastMonthTotal = 0;
+
+      for (let month = 1; month <= months; month += 1) {
+        const ingest = calcMonthlyIngestForMonth(month);
+
+        const billableGbDay = ingest.billableMonthlyGb / DAYS_PER_MONTH;
+        const totalGbDay = ingest.totalMonthlyGb / DAYS_PER_MONTH;
+        const sdlGbDay = ingest.sdlMonthlyGb / DAYS_PER_MONTH;
+
+        billableIngestHistory.push(ingest.billableMonthlyGb);
+        sentinelIngestHistory.push(ingest.totalMonthlyGb);
+        sdlIngestHistory.push(ingest.sdlMonthlyGb);
+
+        const tierMonthlyFloor = tierCfg.gbPerDay > 0 ? tierCfg.gbPerDay * DAYS_PER_MONTH * tierRate : 0;
+        const ingestCost = Math.max(ingest.billableMonthlyGb * tierRate, tierMonthlyFloor);
+
+        let interactiveBillableGb = 0;
+        let archiveGb = 0;
+
+        for (let j = 1; j <= month; j += 1) {
+          const ageMonths = month - j;
+          const cohortGb = sentinelIngestHistory[j - 1];
+
+          if (ageMonths < interactiveMonths) {
+            if (ageMonths >= freeMonths) interactiveBillableGb += cohortGb;
+          } else if (!enableSdl && longTermMonths > 0 && ageMonths < (interactiveMonths + longTermMonths)) {
+            archiveGb += cohortGb;
+          }
+        }
+
+        const interactiveCost = interactiveBillableGb * INTERACTIVE_RATE;
+        const archiveStorageCost = enableSdl ? 0 : (archiveGb * ARCHIVE_RATE);
+
+        let sdlStoredGb = 0;
+        for (let j = 1; j <= month; j += 1) {
+          const ageMonths = month - j;
+          if (ageMonths < longTermMonths) sdlStoredGb += sdlIngestHistory[j - 1];
+        }
+
+        const sdlRetentionBillableGb = sdlStoredGb / SDL_COMPRESSION;
+        const sdlIngestCost = enableSdl ? (ingest.sdlMonthlyGb * SDL_INGEST_RATE) : 0;
+        const sdlStorageCost = enableSdl ? (sdlRetentionBillableGb * SDL_STORAGE_RATE) : 0;
+        const modeledMonthlyCost = ingestCost + interactiveCost + archiveStorageCost + sdlIngestCost + sdlStorageCost;
+        const hasBudgetBase = enableSdl ? ingest.sdlMonthlyGb > 0 : archiveGb > 0;
+        const budgetCost = hasBudgetBase ? (modeledMonthlyCost * BUDGET_PCT_OF_ANNUAL) : 0;
+        const archiveCost = archiveStorageCost + (!enableSdl ? budgetCost : 0);
+        const sdlCost = sdlIngestCost + sdlStorageCost + (enableSdl ? budgetCost : 0);
+        const longTermStorageCost = enableSdl ? sdlStorageCost : archiveStorageCost;
+
+        const total = ingestCost + interactiveCost + archiveStorageCost + sdlIngestCost + sdlStorageCost + budgetCost;
+
+        if (month === 1) {
+          firstMonthBillableGbDay = billableGbDay;
+          firstMonthTotalGbDay = totalGbDay;
+          firstMonthTotal = total;
+        }
+        if (month === months) {
+          lastMonthBillableGbDay = billableGbDay;
+          lastMonthTotalGbDay = totalGbDay;
+          lastMonthTotal = total;
+        }
+
+        rows.push({
+          month,
+          billableGbDay,
+          totalGbDay,
+          sdlGbDay,
+          ingestCost,
+          interactiveCost,
+          archiveCost,
+          sdlCost,
+          budgetCost,
+          sdlIngestCost,
+          longTermStorageCost,
+          total
+        });
+      }
+
+      return {
+        rows,
+        details: {
+          firstMonthBillableGbDay,
+          firstMonthTotalGbDay,
+          lastMonthBillableGbDay,
+          lastMonthTotalGbDay,
+          firstMonthTotal,
+          lastMonthTotal,
+          monthlyDelta: lastMonthTotal - firstMonthTotal,
+          deltaPct: firstMonthTotal > 0 ? ((lastMonthTotal / firstMonthTotal) - 1) * 100 : 0,
+          tierRate,
+          tierKey: state.tier
+        }
+      };
+    }
+
+    function buildSummaryMetrics(forecast) {
+      const rows = forecast.rows;
+      const thisMonth = rows[0] || {};
+      const lastMonth = rows[rows.length - 1] || {};
+      const horizonMonths = Math.max(1, rows.length);
+      const horizonRetention = rows.reduce((sum, row) => sum + (row.interactiveCost || 0), 0);
+      const horizonLongTerm = rows.reduce((sum, row) => sum + (row.longTermStorageCost || 0), 0);
+      const horizonBudget = rows.reduce((sum, row) => sum + (row.budgetCost || 0), 0);
+      const horizonSdlIngestion = rows.reduce((sum, row) => sum + (row.sdlIngestCost || 0), 0);
+      const horizonIngestCost = rows.reduce((sum, row) => sum + (row.ingestCost || 0), 0);
+      const horizonTotalCost = rows.reduce((sum, row) => sum + (row.total || 0), 0);
+
+      const annualRetention = (horizonRetention / horizonMonths) * 12;
+      const annualLongTerm = (horizonLongTerm / horizonMonths) * 12;
+      const annualBudget = (horizonBudget / horizonMonths) * 12;
+      const annualSdlIngestion = (horizonSdlIngestion / horizonMonths) * 12;
+      const annualIngestCost = (horizonIngestCost / horizonMonths) * 12;
+      const annualTotalCost = (horizonTotalCost / horizonMonths) * 12;
+      const avgMonthlyCost = annualTotalCost / 12;
+      const avgDailyCost = annualTotalCost / 365;
+
+      const thisBillableDay = thisMonth.billableGbDay || 0;
+      const lastBillableDay = lastMonth.billableGbDay || 0;
+      const thisIngestMonthGb = thisBillableDay * DAYS_PER_MONTH;
+      const lastIngestMonthGb = lastBillableDay * DAYS_PER_MONTH;
+
+      const horizonBillableIngestGb = rows.reduce((sum, row) => sum + ((row.billableGbDay || 0) * DAYS_PER_MONTH), 0);
+      const horizonTotalIngestGb = rows.reduce((sum, row) => sum + ((row.totalGbDay || 0) * DAYS_PER_MONTH), 0);
+      const annualBillableIngestGb = (horizonBillableIngestGb / horizonMonths) * 12;
+      const annualTotalIngestGb = (horizonTotalIngestGb / horizonMonths) * 12;
+      const avgDailyFromAnnualGb = annualTotalIngestGb / 365;
+      const discountSizeGb = Math.max(0, annualTotalIngestGb - annualBillableIngestGb);
+      const annualSavings = discountSizeGb * (forecast.details.tierRate || 0);
+
+      return {
+        avgDailyFromAnnualGb,
+        thisIngestMonthGb,
+        lastIngestMonthGb,
+        annualTotalIngestGb,
+        discountSizeGb,
+        avgDailyCost,
+        avgMonthlyCost,
+        annualIngestCost,
+        annualTotalCost,
+        annualSavings,
+        annualRetention,
+        annualLongTerm,
+        annualSdlIngestion,
+        annualBudget
+      };
+    }
+
+    function renderSummary(forecast) {
+      const cards = document.getElementById("summaryCards");
+      const metrics = buildSummaryMetrics(forecast);
+
+      const formatGbOrTb = (gb) => {
+        if (gb >= 1024) return `${shortNum(gb / 1024)} TB`;
+        return `${shortNum(gb)} GB`;
+      };
+
+      const toneForCard = (label) => {
+        if (label.includes("Tot") || label.includes("Total")) return "card-tone-total";
+        if (label.includes("In") || label.includes("Ingest") || label.includes("/day") || label.includes("/mo") || label.includes("/yr")) return "card-tone-ingest";
+        if (label.includes("Retn") || label.includes("Retention")) return "card-tone-retention";
+        if (label.includes("LT") || label.includes("Long-term")) return "card-tone-longterm";
+        if (label.includes("SDL")) return "card-tone-sdl";
+        if (label.includes("Q/R") || label.includes("Budget")) return "card-tone-budget";
+        return "card-tone-default";
+      };
+
+      cards.innerHTML = [
+        { k: "Avg Day Yr", v: formatGbOrTb(metrics.avgDailyFromAnnualGb), tip: "Average daily ingest based on annualized total ingest" },
+        { k: "M1 Ingest", v: formatGbOrTb(metrics.thisIngestMonthGb), tip: "Billable ingest volume in month 1" },
+        { k: "MLast In", v: formatGbOrTb(metrics.lastIngestMonthGb), tip: "Billable ingest volume in the last forecast month" },
+        { k: "Total Yr", v: formatGbOrTb(metrics.annualTotalIngestGb), tip: "Annualized total ingest volume" },
+        { k: "Disc Size", v: formatGbOrTb(metrics.discountSizeGb), tip: "Annualized non-billable or discounted ingest volume" },
+        { k: "Avg Day $", v: money(metrics.avgDailyCost), tip: "Average daily cost from annualized spend" },
+        { k: "Mthly $", v: money(metrics.avgMonthlyCost), tip: "Average monthly cost from annualized spend" },
+        { k: "Ann In $", v: money(metrics.annualIngestCost), tip: "Annualized ingest-only cost" },
+        { k: "Ann Tot $", v: money(metrics.annualTotalCost), tip: "Annualized full total cost (ingest and all other charges)" },
+        { k: "Savings $", v: money(metrics.annualSavings), tip: "Estimated savings from E5 offer and Defender for Servers discounts" },
+        { k: "Retn $", v: money(metrics.annualRetention), tip: "Annualized interactive retention cost" },
+        { k: "LT $", v: money(metrics.annualLongTerm), tip: "Annualized long-term storage cost (Archive or SDL storage)" },
+        { k: "SDL In $", v: money(metrics.annualSdlIngestion), tip: "Annualized SDL ingestion cost" },
+        { k: "Q/R $", v: money(metrics.annualBudget), tip: "Annualized query or restore budget" }
+      ].map((c) => `
+        <div class="card ${toneForCard(c.k)}" title="${c.tip}">
+          <div class="k" title="${c.tip}">${c.k}</div>
+          <div class="v">${c.v}</div>
+        </div>
+      `).join("");
+
+      renderComparePanel(metrics);
+    }
+
+    function renderComparePanel(currentMetrics) {
+      const panel = document.getElementById("comparePanel");
+      if (!panel) return;
+
+      if (!compareBaseline) {
+        panel.style.display = "none";
+        panel.innerHTML = "";
+        return;
+      }
+
+      const deltaCell = (label, currentValue, baseValue, isMoney = true) => {
+        const delta = currentValue - baseValue;
+        const cls = delta > 0 ? "compare-delta-up" : (delta < 0 ? "compare-delta-down" : "");
+        const nowValue = isMoney ? money(currentValue) : shortNum(currentValue);
+        const baseFormatted = isMoney ? money(baseValue) : shortNum(baseValue);
+        const deltaFormatted = isMoney ? money(delta) : shortNum(delta);
+        return `
+          <div class="compare-cell">
+            <div class="compare-k">${label}</div>
+            <div class="compare-v">Now ${nowValue}</div>
+            <div class="compare-k">Base ${baseFormatted}</div>
+            <div class="compare-k ${cls}">Delta ${deltaFormatted}</div>
+          </div>
+        `;
+      };
+
+      panel.style.display = "block";
+      panel.innerHTML = `
+        <div class="compare-title">Compare to Baseline (${compareBaseline.stamp})</div>
+        <div class="compare-grid">
+          ${deltaCell("Annual Ingest $", currentMetrics.annualIngestCost, compareBaseline.metrics.annualIngestCost)}
+          ${deltaCell("Annual Total $", currentMetrics.annualTotalCost, compareBaseline.metrics.annualTotalCost)}
+          ${deltaCell("Savings $", currentMetrics.annualSavings, compareBaseline.metrics.annualSavings)}
+          ${deltaCell("Retention $", currentMetrics.annualRetention, compareBaseline.metrics.annualRetention)}
+          ${deltaCell("Long-term $", currentMetrics.annualLongTerm, compareBaseline.metrics.annualLongTerm)}
+          ${deltaCell("SDL Ingest $", currentMetrics.annualSdlIngestion, compareBaseline.metrics.annualSdlIngestion)}
+          ${deltaCell("Query/Restore $", currentMetrics.annualBudget, compareBaseline.metrics.annualBudget)}
+          ${deltaCell("Avg Daily GB", currentMetrics.avgDailyFromAnnualGb, compareBaseline.metrics.avgDailyFromAnnualGb, false)}
+        </div>
+      `;
+    }
+
+    function renderMonthlyTable(forecast) {
+      const tbody = document.getElementById("monthlyTbody");
+      tbody.innerHTML = "";
+      forecast.rows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="mono">M${r.month}</td>
+          <td class="mono">${shortNum(r.billableGbDay)}</td>
+          <td class="mono">${shortNum(r.totalGbDay)}</td>
+          <td class="mono">${shortNum(r.sdlGbDay)}</td>
+          <td class="mono">${money(r.ingestCost)}</td>
+          <td class="mono">${money(r.interactiveCost)}</td>
+          <td class="mono">${money(r.archiveCost)}</td>
+          <td class="mono">${money(r.sdlCost)}</td>
+          <td class="mono"><b>${money(r.total)}</b></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function drawChart(forecast) {
+      const canvas = document.getElementById("chart");
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (w === 0 || h === 0) return;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      const pad = { l: 54, r: 12, t: 14, b: 28 };
+      const pw = w - pad.l - pad.r;
+      const ph = h - pad.t - pad.b;
+
+      const series = {
+        total: forecast.rows.map((r) => r.total),
+        ingest: forecast.rows.map((r) => r.ingestCost),
+        interactive: forecast.rows.map((r) => r.interactiveCost),
+        archive: forecast.rows.map((r) => r.archiveCost),
+        sdl: forecast.rows.map((r) => r.sdlCost),
+        budget: forecast.rows.map((r) => r.budgetCost)
+      };
+
+      const seriesMeta = [
+        { key: "ingest", label: "Ingest", color: "#41c86a", width: 1.8 },
+        { key: "interactive", label: "Interactive Retention", color: "#f1c24d", width: 1.8 },
+        { key: "archive", label: "Archive", color: "#ff9f43", width: 1.8 },
+        { key: "sdl", label: "SDL", color: "#39c6ff", width: 1.8 },
+        { key: "budget", label: "Budget", color: "#b07cff", width: 1.8 },
+        { key: "total", label: "Total", color: "#f05565", width: 3.1 }
+      ];
+
+      const maxY = Math.max(1, ...series.total) * 1.1;
+      const x = (i) => pad.l + (i / (forecast.rows.length - 1 || 1)) * pw;
+      const y = (v) => pad.t + ph - (v / maxY) * ph;
+
+      ctx.strokeStyle = "#cfe0ff";
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i += 1) {
+        const gy = pad.t + (ph * i) / 5;
+        ctx.beginPath();
+        ctx.moveTo(pad.l, gy);
+        ctx.lineTo(w - pad.r, gy);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "#506a99";
+      ctx.font = "11px IBM Plex Mono";
+      for (let i = 0; i <= 5; i += 1) {
+        const value = ((5 - i) / 5) * maxY;
+        const gy = pad.t + (ph * i) / 5;
+        ctx.fillText(`$${Math.round(value).toLocaleString()}`, 4, gy + 4);
+      }
+
+      const drawLine = (arr, color, width = 2) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        arr.forEach((v, i) => {
+          const px = x(i);
+          const py = y(v);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+      };
+
+      seriesMeta.forEach((meta) => drawLine(series[meta.key], meta.color, meta.width));
+
+      ctx.fillStyle = "#4a628f";
+      ctx.font = "11px IBM Plex Mono";
+      const tickStep = Math.max(1, Math.round(forecast.rows.length / 8));
+      forecast.rows.forEach((r, i) => {
+        if (i % tickStep === 0 || i === forecast.rows.length - 1) ctx.fillText(`M${r.month}`, x(i) - 9, h - 8);
+      });
+
+      const legendEl = document.getElementById("legend");
+      if (legendEl) {
+        const legendItems = [
+          { color: "#f05565", label: "Total" },
+          { color: "#41c86a", label: "Ingest" },
+          { color: "#f1c24d", label: "Interactive Retention" }
+        ];
+        if (state.enableSdl) {
+          legendItems.push({ color: "#39c6ff", label: "SDL" });
+        } else if (state.longTermDays > 0) {
+          legendItems.push({ color: "#ff9f43", label: "Archive" });
+        }
+        legendItems.push({ color: "#b07cff", label: "Budget" });
+        legendEl.innerHTML = legendItems.map((item) => `<span><i class="dot" style="background:${item.color}"></i>${item.label}</span>`).join("");
+      }
+
+      chartHoverData = {
+        rows: forecast.rows,
+        series,
+        seriesMeta,
+        x,
+        y,
+        width: w,
+        height: h,
+        pad
+      };
+    }
+
+    function hideChartTooltip() {
+      const tooltip = document.getElementById("chartTooltip");
+      if (tooltip) tooltip.style.display = "none";
+    }
+
+    function showChartTooltip(event) {
+      const tooltip = document.getElementById("chartTooltip");
+      const canvas = document.getElementById("chart");
+      if (!tooltip || !canvas || !chartHoverData) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const mx = event.clientX - rect.left;
+      const my = event.clientY - rect.top;
+      if (mx < chartHoverData.pad.l || mx > chartHoverData.width - chartHoverData.pad.r) {
+        hideChartTooltip();
+        return;
+      }
+
+      const lastIndex = chartHoverData.rows.length - 1;
+      const ratio = (mx - chartHoverData.pad.l) / Math.max(1, (chartHoverData.width - chartHoverData.pad.l - chartHoverData.pad.r));
+      const idx = Math.max(0, Math.min(lastIndex, Math.round(ratio * lastIndex)));
+
+      let best = null;
+      chartHoverData.seriesMeta.forEach((meta) => {
+        const value = chartHoverData.series[meta.key][idx];
+        const py = chartHoverData.y(value);
+        const dist = Math.abs(my - py);
+        if (!best || dist < best.dist) {
+          best = { meta, value, dist };
+        }
+      });
+
+      if (!best || best.dist > 14) {
+        hideChartTooltip();
+        return;
+      }
+
+      tooltip.style.display = "block";
+      tooltip.style.left = `${mx}px`;
+      tooltip.style.top = `${my}px`;
+      tooltip.textContent = `${best.meta.label}: ${money(best.value)}`;
+      tooltip.title = best.meta.label;
+    }
+
+    function renderAssumptions() {
+      const a = document.getElementById("assumptions");
+      a.innerHTML = `
+        <b>Notes</b><br />
+        1. Focus first on ingestion volume and data handling decisions, these drive most Sentinel cost outcomes.<br />
+        2. Best-practice baseline: 12 months interactive retention, plus long-term retention for key or compliance-critical data.<br />
+        3. E5 and Defender for Servers are separate levers; Defender for Servers often has the largest SecurityEvent cost impact.<br />
+        4. Pre-ingestion filtering is usually the highest-return optimization, especially for non-interactive Entra and third-party network logs.<br />
+        5. Route data to SDL selectively based on detection value, query frequency, and investigation needs, not as a blanket rule.<br />
+        6. Budget policy is modeled as 5% of monthly projected spend and grows with volume; treat it as a planning guardrail, not an exact charge.<br />
+        7. Most accurate estimate method: enable connectors for several days (ideally one week), then calibrate filters and routing from real telemetry.
+      `;
+    }
+
+    function recalc() {
+      updateSecurityEventsBilling();
+      const forecast = buildMonthlyForecast();
+      renderSummary(forecast);
+      renderMonthlyTable(forecast);
+      renderAssumptions();
+      drawChart(forecast);
+    }
+
+    function bindControls() {
+      ids.forEach((id) => {
+        const el = document.getElementById(id);
+        el.addEventListener("input", recalc);
+        el.addEventListener("change", recalc);
+      });
+
+      document.getElementById("tier").addEventListener("change", (e) => {
+        const selected = commitmentTiers[e.target.value];
+        if (selected) {
+          document.getElementById("tierRate").value = selected.defaultRate.toFixed(2);
+          if (selected.gbPerDay > 0) {
+            document.getElementById("estimatedDailyGb").value = Math.round(selected.gbPerDay * 0.9);
+            syncEstimatedFromDaily();
+          }
+          seedConnectorEstimates();
+          renderConnectorRows();
+          recalc();
+        }
+      });
+
+      document.getElementById("template")?.addEventListener("change", applyTemplate);
+      document.getElementById("applyBestPractices")?.addEventListener("click", applyBestPracticesSettings);
+      document.getElementById("resetProfile")?.addEventListener("click", resetProfileSettings);
+      document.getElementById("setCompareBaseline")?.addEventListener("click", setCompareBaselineSnapshot);
+      document.getElementById("clearCompareBaseline")?.addEventListener("click", clearCompareBaselineSnapshot);
+
+      document.getElementById("enableSdl")?.addEventListener("change", () => {
+        const enabled = document.getElementById("enableSdl").value === "yes";
+        document.getElementById("budgetLabel").textContent = enabled ? "SDL Budget Policy %" : "Restore Budget Policy %";
+        document.getElementById("budget").value = "5";
+        renderConnectorRows();
+        recalc();
+      });
+
+      ["users", "servers", "license", "defenderForServers"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener("change", () => {
+            seedConnectorEstimates();
+            renderConnectorRows();
+            recalc();
+          });
+        }
+      });
+
+      document.getElementById("exportPdf")?.addEventListener("click", () => {
+        window.print();
+      });
+
+      document.getElementById("themeToggle")?.addEventListener("click", () => {
+        const useDark = !document.body.classList.contains("dark-theme");
+        setThemeMode(useDark);
+      });
+
+      document.getElementById("chart")?.addEventListener("mousemove", showChartTooltip);
+      document.getElementById("chart")?.addEventListener("mouseleave", hideChartTooltip);
+
+      document.getElementById("estimatedMonthlyGb")?.addEventListener("change", () => {
+        syncEstimatedFromMonthly();
+        seedConnectorEstimates();
+        renderConnectorRows();
+        recalc();
+      });
+
+      document.getElementById("estimatedDailyGb")?.addEventListener("change", () => {
+        syncEstimatedFromDaily();
+        seedConnectorEstimates();
+        renderConnectorRows();
+        recalc();
+      });
+
+      window.addEventListener("resize", recalc);
+    }
+
+    function setThemeMode(useDark) {
+      document.body.classList.toggle("dark-theme", useDark);
+      const toggle = document.getElementById("themeToggle");
+      if (toggle) toggle.textContent = useDark ? "Dark Mode: On" : "Dark Mode: Off";
+      localStorage.setItem("sentinelCalculatorTheme", useDark ? "dark" : "light");
+      drawChart(buildMonthlyForecast());
+    }
+
+    function initThemeMode() {
+      const saved = localStorage.getItem("sentinelCalculatorTheme");
+      setThemeMode(saved === "dark");
+    }
+
+    setupTemplateAndTier();
+    renderConnectorRows();
+    bindControls();
+    initThemeMode();
+    requestAnimationFrame(recalc);
+  </script>
+</body>
+</html>
+
