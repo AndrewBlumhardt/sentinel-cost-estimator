@@ -1,5 +1,7 @@
 # Sentinel Cost Estimator
 
+[View on GitHub](https://github.com/AndrewBlumhardt/sentinel-cost-estimator) | [Download estimator](https://github.com/AndrewBlumhardt/sentinel-cost-estimator/raw/main/sentinel-cost-calculator.html)
+
 From experience to estimation: a practical Microsoft Sentinel cost estimator built from years of real-world deployments.
 
 ## Why this exists
