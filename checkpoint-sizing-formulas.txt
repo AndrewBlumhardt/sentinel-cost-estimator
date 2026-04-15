@@ -1,0 +1,28 @@
+Sentinel Cost Estimator Checkpoint
+
+Tier samples based on company size
+
+Tier, Commitment (GB/day), Users, Servers, XDR (TB/mo), Entra (TB/mo), Network (TB/mo), Events (TB/mo), Other (TB/mo), Estimated Total (TB/mo), XDR Discount (TB/mo), Billable (TB/mo)
+T0, 50, 500, 25, 0.2, 0.0, 0.0, 0.1, 0.0, 0.3, 0.1, 0.2
+T1, 100, 3000, 100, 0.9, 0.1, 0.1, 0.2, 0.1, 1.4, 0.5, 1.0
+T2, 500, 12000, 500, 3.6, 0.3, 0.4, 1.2, 0.4, 5.9, 1.8, 4.1
+T3, 1000, 40000, 2500, 12.0, 1.1, 1.4, 6.0, 1.4, 21.9, 6.0, 15.9
+T4, 2000, 120000, 10000, 36.0, 3.2, 4.3, 24.0, 4.3, 71.8, 18.0, 53.8
+T5, 5000, 500000, 25000, 150.0, 13.5, 18.0, 60.0, 18.0, 259.5, 75.0, 184.5
+
+Core formulas for manual entry
+
+Daily XDR = Users x 10 MB
+Daily XDR Discount = Users x 5 MB
+Daily Events = Servers x 80 MB
+Monthly = Daily x 30
+
+Connector and table mix (fixed percentages)
+
+XDR (Defender tables): 60%
+Events (server logs): 25%
+Entra (identity logs): 7%
+Network (firewall, proxy, DNS): 5%
+Other (SaaS, custom, misc.): 3%
+
+Total = 100%
